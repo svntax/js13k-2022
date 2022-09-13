@@ -328,6 +328,7 @@ function drawRange(unit){
 }
 
 function unitAttack(u1, u2){
+    if(u1.health <= 0) return;
     const dmg = randInt(u1.damageRange[0], u1.damageRange[1]);
     // TODO: show damage number?
     //console.log(dmg);
@@ -391,6 +392,7 @@ function enterState(newState){
         for(let i = 0; i < enemyUnits.length; i++){
             let e = enemyUnits[i];
             let target = e.findTarget(playerUnits);
+            if(target == null) continue;
             if(e.distanceTo(target) <= e.range){
                 // Can attack without moving
                 e.state = UnitState.Attack;
