@@ -1,4 +1,4 @@
-import { init, initKeys, initPointer, onPointer, GameLoop, Scene, Sprite, TileEngine, track, Button } from "./kontra.js";
+import { init, initKeys, initPointer, onPointer, GameLoop, Scene, Sprite, TileEngine, track, Button, randInt } from "./kontra.js";
 //import { zzfx, zzfxP } from "./zzfx.js";
 //import { zzfxM } from "./zzfxm.min.js";
 
@@ -35,21 +35,25 @@ let gameObjects = Scene({
 });
 let player, enemy, skeleton, bird, enemyBird;
 
-let attackButton = Button({
-    x: 212,
-    y: 52,
+let stayBtn = Button({
+    x: 236,
+    y: 32,
     anchor: {x: 0.5, y: 0.5},
     padX: 4,
     padY: 2,
     text: {
-        text: "Attack",
+        text: "Stay",
         color: "white",
-        font: "16px Arial, sans-serif",
+        font: "12px Arial, sans-serif",
         anchor: {x: 0.5, y: 0.5}
     },
 
     onUp(){
-        console.log("Pressed attack"); // TODO
+        if(selectedUnit != null && selectedUnit.state === UnitState.Ready){
+            selectedUnit.state = UnitState.Attack;
+            clearDraw();
+            drawRange(selectedUnit);
+        }
     },
 
     render(){
@@ -61,26 +65,28 @@ let attackButton = Button({
         }
         this.context.lineWidth = 2;
         this.context.strokeStyle = this.textNode.color;
-        this.context.strokeRect(0, 0, this.width, this.height);
+        this.context.strokeRect(0, -1, this.width, this.height);
     }
 });
-let waitButton = Button({
-    x: 206,
-    y: 24,
+let endBtn = Button({
+    x: 236,
+    y: 12,
     anchor: {x: 0.5, y: 0.5},
     padX: 4,
     padY: 2,
     text: {
-        text: "Wait",
+        text: "End",
         color: "white",
-        font: "16px Arial, sans-serif",
+        font: "12px Arial, sans-serif",
         anchor: {x: 0.5, y: 0.5}
     },
 
-    onUp(){
-        selectedUnit.state = UnitState.Finished;
+    onUp(){ // End your turn completely
+        for(let i = 0; i < playerUnits.length; i++){
+            playerUnits[i].state = UnitState.Finished;
+        }
         selectedUnit = null;
-        enterState(GameState.PlayerMove);
+        enterState(GameState.EnemyTurn);
     },
 
     render(){
@@ -92,7 +98,7 @@ let waitButton = Button({
         }
         this.context.lineWidth = 2;
         this.context.strokeStyle = this.textNode.color;
-        this.context.strokeRect(0, 0, this.width, this.height);
+        this.context.strokeRect(0, -1, this.width, this.height);
     }
 });
 
@@ -105,7 +111,7 @@ let playerUnits = [];
 let enemyUnits = [];
 let selectedUnit = null;
 
-const GameState = {PlayerMove: 0, PlayerAction: 1, EnemyMove: 2, EnemyAction: 3};
+const GameState = {PlayerTurn: 0, EnemyTurn: 1};
 let gameState = 0;
 
 // Tilemap setup
@@ -186,7 +192,7 @@ tileset.onload = function(){
         row: 4, col: 11,
         team: "enemy", unitType: UnitType.Flying, imagePath: "../img/bird.png", frames: [0,1]
     });
-    enemyUnits.push(enemy);
+    enemyUnits.push(enemyBird);
 };
 
 function getNeighbors(tile){
@@ -206,6 +212,7 @@ function getNeighbors(tile){
 function getRange(unit){
     let visited = [];
     let frontier = [];
+    const attacking = unit.state === UnitState.Attack;
 
     // Reset the grid first
     for(let i = 0; i < grid.length; i++) {
@@ -218,31 +225,45 @@ function getRange(unit){
     tile.depth = 0;
 
     frontier.push(tile);
+    if(unit.state === UnitState.Finished) return frontier; // Don't calculate if unit is done this turn
     visited.push(tile);
 
     while(frontier.length != 0){
         let current = frontier.shift();
-        if(visited.indexOf(current) == -1 && unit.canOccupyTile(current)){
+        // If attacking, don't consider obstacles in the search.
+        if(visited.indexOf(current) == -1 && ((!attacking && unit.canOccupyTile(current)) || attacking)){
             visited.push(current);
         }
 
         let neighbors = getNeighbors(current);
         for(let i = 0; i < neighbors.length; i++){
-            let nextDepth = current.depth + Math.max(neighbors[i].cost, current.cost);
-
-            // Units of the opposing team count as blocking a tile
-            const unitIsBlockingTile = (selectedUnit.team === "player" && neighbors[i].containsEnemy) || (selectedUnit.team === "enemy" && neighbors[i].containsPlayer);
-            if(!unit.canOccupyTile(neighbors[i]) || unitIsBlockingTile || nextDepth > unit.moves){
-                nextDepth = Math.max(current.depth + 1, unit.moves + 1);
-                if(nextDepth > unit.moves + unit.range){
+            if(attacking){ // Consider all tiles as having a cost of 1 (Note: walls could block ranged projectiles here if desired)
+                let nd = current.depth + 1;
+                if(nd > unit.range){
                     continue;
                 }
+                if(nd < neighbors[i].depth){
+                    neighbors[i].depth = nd;
+                    neighbors[i].cameFrom = current;
+                    frontier.push(neighbors[i]);
+                }
             }
+            else{
+                let nextDepth = current.depth + Math.max(neighbors[i].cost, current.cost);
+                // Units of the opposing team count as blocking a tile
+                const unitIsBlockingTile = (selectedUnit.team === "player" && neighbors[i].containsEnemy) || (selectedUnit.team === "enemy" && neighbors[i].containsPlayer);
+                if(!unit.canOccupyTile(neighbors[i]) || unitIsBlockingTile || nextDepth > unit.moves){
+                    nextDepth = Math.max(current.depth + 1, unit.moves + 1);
+                    if(nextDepth > unit.moves + unit.range){
+                        continue;
+                    }
+                }
 
-            if(nextDepth < neighbors[i].depth){
-                neighbors[i].depth = nextDepth;
-                neighbors[i].cameFrom = current;
-                frontier.push(neighbors[i]);
+                if(nextDepth < neighbors[i].depth){
+                    neighbors[i].depth = nextDepth;
+                    neighbors[i].cameFrom = current;
+                    frontier.push(neighbors[i]);
+                }
             }
         }
     }
@@ -254,10 +275,11 @@ function clearDraw(){
     drawn = [];
 }
 
-function drawRange(unit, attacking = false){
+function drawRange(unit){
     clearDraw();
     let range = getRange(unit);
     for(let i = 0; i < range.length; i++){
+        if(unit.state !== UnitState.Finished && range[i].row === unit.row && range[i].col === unit.col) continue;
         // Blue = tiles the unit can move to
         // Red = for outside those bounds
         let tile = Sprite({
@@ -266,14 +288,25 @@ function drawRange(unit, attacking = false){
             width: 16, height: 16,
             color: selectedUnit.team === "player" ? "#ff000077" : "#ff000055"
         });
-        if(range[i].depth <= unit.moves){
-            tile.color = selectedUnit.team === "player" ? "#0000ff77" : "#0000ff33";
-            // Unoccupied tiles within range should listen for input since the unit can move to any of them.
-            if(selectedUnit.team === "player" && !range[i].containsPlayer){
+        tile.dataObj = range[i];
+        if(unit.state === UnitState.Attack){
+            if(range[i].depth <= unit.range && selectedUnit.team === "player" && range[i].containsEnemy){
+                // Only attack tiles with an enemy occupying one should listen for input
                 track(tile);
             }
             tile.isTile = true;
         }
+        else{
+            if(range[i].depth <= unit.moves){
+                tile.color = selectedUnit.team === "player" ? "#0000ff77" : "#0000ff33";
+                // Unoccupied tiles within range should listen for input since the unit can move to any of them.
+                if(selectedUnit.team === "player" && !range[i].containsPlayer){
+                    track(tile);
+                }
+                tile.isTile = true;
+            }
+        }
+        
         if(unit.state === UnitState.Finished){
             tile.color = "#23232344";
         }
@@ -284,10 +317,26 @@ function drawRange(unit, attacking = false){
     }
 }
 
+function unitAttack(u1, u2){
+    const dmg = randInt(u1.damageRange[0], u1.damageRange[1]);
+    // TODO: show damage number?
+    console.log(dmg);
+    u2.damage(dmg);
+    u1.state = UnitState.Finished;
+}
+
 function enterState(newState){
     gameState = newState;
-    if(newState === GameState.PlayerAction){
-        // Show menu
+    // TODO turns system
+    if(newState === GameState.PlayerTurn){
+        // Reset the state of each unit
+        for(let i = 0; i < playerUnits.length; i++){
+            playerUnits[i].state = UnitState.Ready;
+        }
+    }
+    else if(newState === GameState.EnemyTurn){
+        // TEMP
+        enterState(GameState.PlayerTurn);
     }
 }
 
@@ -296,7 +345,7 @@ onPointer("down", function(e, obj){
         //myAudioNode = zzfxP(...mySongData);
     //}
 
-    if(gameState === GameState.PlayerMove){
+    if(gameState === GameState.PlayerTurn){
         if(obj && obj.unit){ // Clicked on a unit
             let unit = obj.unit;
     
@@ -315,14 +364,28 @@ onPointer("down", function(e, obj){
                 selectedUnit = null;
                 clearDraw();
             }
-            else if(obj.isTile && selectedUnit.team === "player" && selectedUnit.state === UnitState.Ready){
-                selectedUnit.move(obj);
-                enterState(GameState.PlayerAction);
-                clearDraw();
+            else if(obj.isTile && selectedUnit.team === "player"){
+                if(selectedUnit.state === UnitState.Ready){
+                    selectedUnit.move(obj);
+                    clearDraw();
+                    selectedUnit = null;
+                }
+                else if(selectedUnit.state === UnitState.Attack){
+                    let u2;
+                    for(let i = 0; i < enemyUnits.length; i++){
+                        if(enemyUnits[i].row === obj.dataObj.row && enemyUnits[i].col === obj.dataObj.col){
+                            u2 = enemyUnits[i];
+                            break;
+                        }
+                    }
+                    unitAttack(selectedUnit, u2);
+                    clearDraw();
+                    selectedUnit = null;
+                }
             }
         }
     }
-    else if(gameState === GameState.PlayerAction){
+    else{
 
     }
 });
@@ -338,9 +401,11 @@ let loop = GameLoop({
         for(let i = 0; i < drawn.length; i++){
             drawn[i].render();
         }
-        if(gameState === GameState.PlayerAction){
-            attackButton.render();
-            waitButton.render();
+        if(gameState === GameState.PlayerTurn){
+            if(selectedUnit && selectedUnit.team === "player" && selectedUnit.state === UnitState.Ready){
+                stayBtn.render();
+            }
+            endBtn.render();
         }
     }
 });

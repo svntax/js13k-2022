@@ -1,7 +1,7 @@
 import { Sprite, SpriteSheet, track } from "../kontra.js";
 
 export const UnitType = {Ground: 0, Flying: 1}
-export const UnitState = {Ready: 0, Finished: 1}
+export const UnitState = {Ready: 0, Finished: 1, Attack: 2}
 
 export class Unit {
     constructor(scene, grid, data){
@@ -12,7 +12,7 @@ export class Unit {
         this.team = data.team;
         this.unitType = data.unitType;
         this.damageRange = data.damage;
-        this.state = 0;
+        this.state = UnitState.Ready;
 
         this.health = data.maxHealth;
         this.maxHealth = data.maxHealth;
@@ -27,7 +27,7 @@ export class Unit {
         
         this.scene = scene;
         this.grid = grid;
-        this.speed = .6;
+        //this.speed = .6;
         let unitObject = this;
         let unitImage = new Image();
         unitImage.src = data.imagePath;
@@ -72,6 +72,8 @@ export class Unit {
     move(targetTile){
         const newRow = targetTile.row;
         const newCol = targetTile.col;
+
+        // Update the grid tile status
         if(this.team === "player"){
             this.grid[newRow][newCol].containsPlayer = true;
             this.grid[this.row][this.col].containsPlayer = false;
@@ -80,17 +82,21 @@ export class Unit {
             this.grid[newRow][newCol].containsEnemy = true;
             this.grid[this.row][this.col].containsEnemy = false;
         }
+
         // TODO: animate walking to the target tile
+
         if(newCol > this.col){
             this.unitSprite.scaleX = -1;
         }
         else if(newCol < this.col){
             this.unitSprite.scaleX = 1;
         }
+
         this.row = newRow;
         this.col = newCol;
         this.unitSprite.x = newCol * 16 + 8;
         this.unitSprite.y = newRow * 16 + 8;
+        this.state = UnitState.Attack;
     }
 
     canOccupyTile(tile){
