@@ -12,7 +12,10 @@ import skelebird from "../img/skelebird.png";
 import skeleton_sprite from "../img/skeleton.png";
 import knight_sprite from "../img/knight.png";
 import bird_sprite from "../img/bird.png";
+import bones from "../img/bones.png";
+import bones2 from "../img/bones2.png";
 import { Unit, UnitType, UnitState } from "./entities/Unit.js";
+import { BonesType } from "./entities/Bones.js";
 
 // Credits to https://github.com/ezig/strategy-game for the tile-based movement system.
 
@@ -30,9 +33,30 @@ async function testContractMethod(){
     console.log(levels);
 }
 
+let bonesObjects = Scene({id: "bones"});
 let gameObjects = Scene({
     id: "gameObjects"
 });
+gameObjects.bonesList = bonesObjects;
+
+// Properties for each unit type
+const skeletonProps = {
+    moves: 2, range: 1, maxHealth: 10, team: "player", damage: [2, 3], name: "Skeleton",
+    unitType: UnitType.Ground, imagePath: "../img/skeleton.png", frames: [0,1]
+};
+const skelebirdProps = {
+    moves: 2, range: 1, maxHealth: 5, team: "player", damage: [1, 2], name: "Skelebird",
+    unitType: UnitType.Flying, imagePath: "../img/skelebird.png", frames: [0,1]
+};
+const knightProps = {
+    moves: 2, range: 1, maxHealth: 10, team: "enemy", damage: [2, 3], name: "Knight",
+    unitType: UnitType.Ground, imagePath: "../img/knight.png", frames: [0,1]
+};
+const birdProps = {
+    moves: 2, range: 1, maxHealth: 5, team: "enemy", damage: [1, 2], name: "Bird",
+    unitType: UnitType.Flying, imagePath: "../img/bird.png", frames: [0,1]
+};
+
 let player, enemy, skeleton, bird, enemyBird;
 
 let stayBtn = Button({
@@ -85,6 +109,7 @@ let endBtn = Button({
         for(let i = 0; i < playerUnits.length; i++){
             playerUnits[i].state = UnitState.Finished;
         }
+        clearDraw();
         selectedUnit = null;
         enterState(GameState.EnemyTurn);
     },
@@ -160,38 +185,21 @@ tileset.onload = function(){
     // Add units
     player = new Unit(gameObjects, grid, {
         moves: 2, range: 1, maxHealth: 10, team: "player", damage: [1, 2],
-        row: 3, col: 5,
         unitType: UnitType.Ground, imagePath: "../img/lich.png", frames: [0,1]
-    });
+    }, 3, 5);
     playerUnits.push(player);
 
     // TODO: temporary, units should spawn from dead enemies
-    bird = new Unit(gameObjects, grid, {
-        moves: 2, range: 1, maxHealth: 5, team: "player", damage: [1, 2],
-        row: 5, col: 4,
-        unitType: UnitType.Flying, imagePath: "../img/skelebird.png", frames: [0,1]
-    });
+    bird = new Unit(gameObjects, grid, skelebirdProps, 5, 2);
     playerUnits.push(bird);
 
-    skeleton = new Unit(gameObjects, grid, {
-        moves: 2, range: 1, maxHealth: 10, team: "player", damage: [2, 3],
-        row: 5, col: 2,
-        unitType: UnitType.Ground, imagePath: "../img/skeleton.png", frames: [0,1]
-    });
+    skeleton = new Unit(gameObjects, grid, skeletonProps, 5, 4);
     playerUnits.push(skeleton);
 
-    enemy = new Unit(gameObjects, grid, {
-        moves: 2, range: 1, maxHealth: 10, team: "enemy", damage: [2, 3],
-        row: 6, col: 11,
-        unitType: UnitType.Ground, imagePath: "../img/knight.png", frames: [0,1]
-    });
+    enemy = new Unit(gameObjects, grid, knightProps, 6, 5);
     enemyUnits.push(enemy);
 
-    enemyBird = new Unit(gameObjects, grid, {
-        moves: 2, range: 1, maxHealth: 5,
-        row: 4, col: 11,
-        team: "enemy", unitType: UnitType.Flying, imagePath: "../img/bird.png", frames: [0,1]
-    });
+    enemyBird = new Unit(gameObjects, grid, birdProps, 4, 7);
     enemyUnits.push(enemyBird);
 };
 
@@ -322,7 +330,37 @@ function unitAttack(u1, u2){
     // TODO: show damage number?
     console.log(dmg);
     u2.damage(dmg);
-    u1.state = UnitState.Finished;
+    // Check if unit that was attacked is dead
+    if(u2.health <= 0){
+        // Game over if the main necromancer is dead
+        if(u2 == player){
+            console.log("Game over"); // TODO game over
+        }
+        // Remove this unit from the game
+        if(u2.team === "player"){
+            let i = playerUnits.indexOf(u2);
+            if(i > -1) playerUnits.splice(i, 1);
+        }
+        else if(u2.team === "enemy"){
+            let i = enemyUnits.indexOf(u2);
+            if(i > -1) enemyUnits.splice(i, 1);
+        }
+    }
+}
+
+function necromancy(bones){
+    let unit;
+    if(bones.type === BonesType.Skeleton){
+        unit = new Unit(gameObjects, grid, skeletonProps, bones.row, bones.col);
+    }
+    else if(bones.type === BonesType.Bird){
+        unit = new Unit(gameObjects, grid, skelebirdProps, bones.row, bones.col);
+    }
+    playerUnits.push(unit);
+    // Remove the bones
+    grid[bones.row][bones.col].bonesObj = null;
+    let i = bonesObjects.objects.indexOf(bones.sprite);
+    if(i > -1) bonesObjects.objects.splice(i, 1);
 }
 
 function enterState(newState){
@@ -332,6 +370,17 @@ function enterState(newState){
         // Reset the state of each unit
         for(let i = 0; i < playerUnits.length; i++){
             playerUnits[i].state = UnitState.Ready;
+        }
+
+        // Resurrect mechanic, turn all neighboring bones into new units
+        let t = grid[player.row][player.col];
+        let n = getNeighbors(t);
+        for(let i = 0; i < n.length; i++){
+            // Can't use necromancy on bones that have a unit standing on them
+            if(n[i].containsEnemy || n[i].containsPlayer) continue;
+            if(n[i].bonesObj){
+                necromancy(n[i].bonesObj);
+            }
         }
     }
     else if(newState === GameState.EnemyTurn){
@@ -378,7 +427,12 @@ onPointer("down", function(e, obj){
                             break;
                         }
                     }
+                    selectedUnit.state = UnitState.Finished;
+                    // Attack and counterattack
+                    // TODO: attack animation
                     unitAttack(selectedUnit, u2);
+                    unitAttack(u2, selectedUnit);
+
                     clearDraw();
                     selectedUnit = null;
                 }
@@ -397,6 +451,7 @@ let loop = GameLoop({
     },
     render: function(){
         tileMap.render();
+        bonesObjects.render();
         gameObjects.render();
         for(let i = 0; i < drawn.length; i++){
             drawn[i].render();

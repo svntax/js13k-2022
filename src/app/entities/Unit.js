@@ -1,18 +1,20 @@
 import { Sprite, SpriteSheet, track } from "../kontra.js";
+import { Bones, BonesType } from "./Bones.js";
 
 export const UnitType = {Ground: 0, Flying: 1}
 export const UnitState = {Ready: 0, Finished: 1, Attack: 2}
 
 export class Unit {
-    constructor(scene, grid, data){
-        this.row = data.row;
-        this.col = data.col;
+    constructor(scene, grid, data, row, col){
+        this.row = row;
+        this.col = col;
         this.moves = data.moves;
         this.range = data.range;
         this.team = data.team;
         this.unitType = data.unitType;
         this.damageRange = data.damage;
         this.state = UnitState.Ready;
+        this.name = data.name;
 
         this.health = data.maxHealth;
         this.maxHealth = data.maxHealth;
@@ -28,12 +30,12 @@ export class Unit {
         this.scene = scene;
         this.grid = grid;
         //this.speed = .6;
-        let unitObject = this;
-        let unitImage = new Image();
-        unitImage.src = data.imagePath;
-        unitImage.onload = function(){
+        let unitObj = this;
+        let img = new Image();
+        img.src = data.imagePath;
+        img.onload = function(){
             let spriteSheet = SpriteSheet({
-                image: unitImage,
+                image: img,
                 frameWidth: 16,
                 frameHeight: 16,
                 animations: {
@@ -43,9 +45,9 @@ export class Unit {
                     }
                 }
             });
-            let sprite = unitObject.unitSprite = Sprite({
-                x: data.col * 16 + 8,
-                y: data.row * 16 + 8,
+            let sprite = unitObj.unitSprite = Sprite({
+                x: col * 16 + 8,
+                y: row * 16 + 8,
                 anchor: {x: 0.5, y: 0.5},
                 animations: spriteSheet.animations,
                 update: function(){
@@ -54,18 +56,18 @@ export class Unit {
                     this.advance();
                 }
             });
-            sprite.addChild(unitObject.healthBar);
+            sprite.addChild(unitObj.healthBar);
             scene.add(sprite);
             if(data.team === "player"){
-                grid[data.row][data.col].containsPlayer = true;
+                grid[row][col].containsPlayer = true;
                 // Enemies come from the right, so make the unit face right
                 sprite.scaleX = -1;
             }
             else{
-                grid[data.row][data.col].containsEnemy = true;
+                grid[row][col].containsEnemy = true;
             }
             track(sprite);
-            sprite.unit = unitObject;
+            sprite.unit = unitObj;
         };
     }
 
@@ -108,8 +110,26 @@ export class Unit {
     damage(amount){
         this.health -= amount;
         if(this.health <= 0){
-            // TODO: dead
             this.health = 0;
+
+            if(this.name === "Bird" || this.name === "Knight"){
+                let bt = BonesType.Skeleton;
+                if(this.name === "Bird"){
+                    bt = BonesType.Bird;
+                }
+                new Bones(this.scene.bonesList, this.grid, {row: this.row, col: this.col, type: bt});
+            }
+
+            // Remove this unit's sprite from the scene
+            let i = this.scene.objects.indexOf(this.unitSprite);
+            if(i > -1) this.scene.objects.splice(i, 1);
+            // Update the contains flag for the tile this unit is on
+            if(this.team === "player"){
+                this.grid[this.row][this.col].containsPlayer = false;
+            }
+            else{
+                this.grid[this.row][this.col].containsEnemy = false;
+            }
         }
         // Update healthbar
         this.healthBar.width = 12 * (this.health / 12);
