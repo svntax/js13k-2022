@@ -1,0 +1,23 @@
+html {
+    height: 100%;
+}
+
+body {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    margin: 0;
+    background-color: #121212;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game {
+    display: block;
+    background-color: aliceblue;
+    width: 100%; /* Assumes landscape orientation */
+    max-height: 100vh;
+    max-width: calc(100vh * (16 / 9));
+}
