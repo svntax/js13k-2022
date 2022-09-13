@@ -158,12 +158,12 @@ tileset.onload = function(){
         layers: [{
             name: "main",
             data: [ 3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
-                    3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,
-                    3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,
-                    3,1,1,1,1,1,1,1,1,1,1,3,3,1,1,3,
-                    3,1,1,1,1,1,1,1,1,1,1,1,3,1,1,3,
-                    3,1,1,1,1,1,1,2,2,1,1,3,3,1,1,3,
-                    3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,
+                    3,1,1,1,1,1,1,2,2,1,1,1,1,1,1,3,
+                    3,1,3,1,1,1,1,1,1,1,1,1,1,1,1,3,
+                    3,1,1,1,1,1,1,2,2,1,1,3,2,3,1,3,
+                    3,1,3,1,1,1,1,1,1,1,1,1,1,1,1,3,
+                    3,1,1,1,1,1,1,2,2,1,1,3,2,3,1,3,
+                    3,1,3,1,1,1,1,1,1,1,1,1,1,1,1,3,
                     3,1,1,1,1,1,1,2,2,1,1,1,1,1,1,3,
                     3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
                     ]
@@ -184,23 +184,25 @@ tileset.onload = function(){
 
     // Add units
     player = new Unit(gameObjects, grid, {
-        moves: 2, range: 1, maxHealth: 10, team: "player", damage: [1, 2],
+        moves: 2, range: 1, maxHealth: 10, team: "player", damage: [1, 2], name: "Player",
         unitType: UnitType.Ground, imagePath: "../img/lich.png", frames: [0,1]
-    }, 3, 5);
+    }, 4, 3);   
     playerUnits.push(player);
 
-    // TODO: temporary, units should spawn from dead enemies
+    // TODO: temporary, units should spawn from spawning system, starter units, and necromancy
     bird = new Unit(gameObjects, grid, skelebirdProps, 5, 2);
     playerUnits.push(bird);
 
-    skeleton = new Unit(gameObjects, grid, skeletonProps, 5, 4);
+    skeleton = new Unit(gameObjects, grid, skeletonProps, 3, 2);
     playerUnits.push(skeleton);
 
-    enemy = new Unit(gameObjects, grid, knightProps, 6, 5);
+    enemy = new Unit(gameObjects, grid, knightProps, 4, 14);
     enemyUnits.push(enemy);
 
-    enemyBird = new Unit(gameObjects, grid, birdProps, 4, 7);
+    enemyBird = new Unit(gameObjects, grid, birdProps, 4, 12);
     enemyUnits.push(enemyBird);
+    enemyUnits.push(new Unit(gameObjects, grid, birdProps, 2, 12));
+    enemyUnits.push(new Unit(gameObjects, grid, birdProps, 6, 12));
 };
 
 function getNeighbors(tile){
@@ -328,7 +330,7 @@ function drawRange(unit){
 function unitAttack(u1, u2){
     const dmg = randInt(u1.damageRange[0], u1.damageRange[1]);
     // TODO: show damage number?
-    console.log(dmg);
+    //console.log(dmg);
     u2.damage(dmg);
     // Check if unit that was attacked is dead
     if(u2.health <= 0){
@@ -365,26 +367,74 @@ function necromancy(bones){
 
 function enterState(newState){
     gameState = newState;
-    // TODO turns system
+    // Turns system
     if(newState === GameState.PlayerTurn){
         // Reset the state of each unit
         for(let i = 0; i < playerUnits.length; i++){
             playerUnits[i].state = UnitState.Ready;
         }
 
-        // Resurrect mechanic, turn all neighboring bones into new units
-        let t = grid[player.row][player.col];
-        let n = getNeighbors(t);
-        for(let i = 0; i < n.length; i++){
-            // Can't use necromancy on bones that have a unit standing on them
-            if(n[i].containsEnemy || n[i].containsPlayer) continue;
-            if(n[i].bonesObj){
-                necromancy(n[i].bonesObj);
+        // Necromancy mechanic, turn all neighboring bones into new units
+        if(player.health > 0){
+            let t = grid[player.row][player.col];
+            let n = getNeighbors(t);
+            for(let i = 0; i < n.length; i++){
+                // Can't use necromancy on bones that have a unit standing on them
+                if(n[i].containsEnemy || n[i].containsPlayer) continue;
+                if(n[i].bonesObj){
+                    necromancy(n[i].bonesObj);
+                }
             }
         }
     }
     else if(newState === GameState.EnemyTurn){
-        // TEMP
+        for(let i = 0; i < enemyUnits.length; i++){
+            let e = enemyUnits[i];
+            let target = e.findTarget(playerUnits);
+            if(e.distanceTo(target) <= e.range){
+                // Can attack without moving
+                e.state = UnitState.Attack;
+                console.log(e.name + " can attack " + target.name);
+                // Attack and counterattack
+                // TODO: attack animation
+                unitAttack(e, target);
+                unitAttack(target, e);
+                e.state = UnitState.Finished;
+            }
+            else{
+                let path = e.calculatePathTo(e.findTarget(playerUnits));
+                let reachableTiles = [];
+                for(let n = 0; n < path.length && n <= e.moves; n++){
+                    // Debug: draw path that the enemy can take
+                    let tile = Sprite({
+                        x: path[n].col * 16 + 4,
+                        y: path[n].row * 16 + 4,
+                        width: 8, height: 8,
+                        color: "#ff000055"
+                    });
+                    drawn.push(tile);
+                    reachableTiles.push(path[n]);
+                }
+                let targetIndex = reachableTiles.length -1;
+                let targetTile = reachableTiles[targetIndex];
+                let tileData = grid[targetTile.row][targetTile.col];
+                while(targetIndex > 0 && (tileData.containsEnemy || tileData.containsPlayer)){
+                    targetIndex--;
+                    targetTile = reachableTiles[targetIndex];
+                    tileData = grid[targetTile.row][targetTile.col];
+                }
+                e.move(reachableTiles[targetIndex]);
+
+                if(e.distanceTo(target) <= e.range){
+                    // Attack and counterattack
+                    // TODO: attack animation
+                    console.log(e.name + " can attack " + target.name);
+                    unitAttack(e, target);
+                    unitAttack(target, e);
+                }
+                e.state = UnitState.Finished;
+            }
+        }
         enterState(GameState.PlayerTurn);
     }
 }

@@ -1,5 +1,6 @@
 import { Sprite, SpriteSheet, track } from "../kontra.js";
 import { Bones, BonesType } from "./Bones.js";
+import { astar } from "../Pathfinding.js";
 
 export const UnitType = {Ground: 0, Flying: 1}
 export const UnitState = {Ready: 0, Finished: 1, Attack: 2}
@@ -29,7 +30,6 @@ export class Unit {
         
         this.scene = scene;
         this.grid = grid;
-        //this.speed = .6;
         let unitObj = this;
         let img = new Image();
         img.src = data.imagePath;
@@ -112,7 +112,7 @@ export class Unit {
         if(this.health <= 0){
             this.health = 0;
 
-            if(this.name === "Bird" || this.name === "Knight"){
+            if((this.name === "Bird" || this.name === "Knight") && this.grid[this.row][this.col].bonesObj == null){
                 let bt = BonesType.Skeleton;
                 if(this.name === "Bird"){
                     bt = BonesType.Bird;
@@ -133,5 +133,50 @@ export class Unit {
         }
         // Update healthbar
         this.healthBar.width = 12 * (this.health / 12);
+    }
+
+    // Manhattan distance
+    distanceTo(unit){
+        return Math.abs(this.row - unit.row) + Math.abs(this.col - unit.col);
+    }
+
+    // Finds a player unit to target
+    findTarget(units){
+        if(units.length > 0){
+            // Find all units within this unit's range
+            let targets = []; 
+            for(let i = 0; i < units.length; i++){
+                if(this.distanceTo(units[i]) <= Math.round(this.moves + this.range)){
+                    targets.push(units[i]);
+                }
+            }
+            // There are reachable units
+            if(targets.length > 0){
+                // Sort units by ascending health and return the weakest one
+                targets.sort(function(u1, u2) { return u1.health - u2.health; });
+                return targets[0];
+            }
+            // There are no reachable units
+            else{
+                // Target closest unit
+                let minDist = Infinity;
+                let closest = units[0];
+                for(let i = 0; i < units.length; i++){
+                    let d = this.distanceTo(units[i]);
+                    if(d < minDist){
+                        minDist = d;
+                        closest = units[i];
+                    }
+                }
+                return closest;
+            }
+        }
+        return null;
+    }
+
+    calculatePathTo(target){
+        const start = {row: this.row, col: this.col};
+        const end = {row: target.row, col: target.col};
+        return astar(this.grid, start, end, this);
     }
 }
