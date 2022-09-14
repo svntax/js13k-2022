@@ -1,7 +1,7 @@
 import { Sprite } from "../kontra.js";
 
 export const BonesType = {Skeleton: 0, Bird: 1}
-const IMG_SOURCES = ["../img/bones.png", "../img/bones2.png"];
+const IMG_SOURCES = ["img/bones.png", "img/bones2.png"];
 
 export class Bones {
     constructor(scene, grid, data){

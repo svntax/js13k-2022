@@ -42,19 +42,19 @@ gameObjects.bonesList = bonesObjects;
 // Properties for each unit type
 const skeletonProps = {
     moves: 2, range: 1, maxHealth: 10, team: "player", damage: [2, 3], name: "Skeleton",
-    unitType: UnitType.Ground, imagePath: "../img/skeleton.png", frames: [0,1]
+    unitType: UnitType.Ground, imagePath: "img/skeleton.png", frames: [0,1]
 };
 const skelebirdProps = {
     moves: 2, range: 1, maxHealth: 5, team: "player", damage: [1, 2], name: "Skelebird",
-    unitType: UnitType.Flying, imagePath: "../img/skelebird.png", frames: [0,1]
+    unitType: UnitType.Flying, imagePath: "img/skelebird.png", frames: [0,1]
 };
 const knightProps = {
     moves: 2, range: 1, maxHealth: 10, team: "enemy", damage: [2, 3], name: "Knight",
-    unitType: UnitType.Ground, imagePath: "../img/knight.png", frames: [0,1]
+    unitType: UnitType.Ground, imagePath: "img/knight.png", frames: [0,1]
 };
 const birdProps = {
     moves: 2, range: 1, maxHealth: 5, team: "enemy", damage: [1, 2], name: "Bird",
-    unitType: UnitType.Flying, imagePath: "../img/bird.png", frames: [0,1]
+    unitType: UnitType.Flying, imagePath: "img/bird.png", frames: [0,1]
 };
 
 let player, enemy, skeleton, bird, enemyBird;
@@ -144,7 +144,7 @@ let tileMap = Scene({
     id: "tileMap"
 });
 let tileset = new Image();
-tileset.src = "../img/tiles.png";
+tileset.src = "img/tiles.png";
 tileset.onload = function(){
     let tileEngine = TileEngine({
         tilewidth: 16,
@@ -185,7 +185,7 @@ tileset.onload = function(){
     // Add units
     player = new Unit(gameObjects, grid, {
         moves: 2, range: 1, maxHealth: 10, team: "player", damage: [1, 2], name: "Player",
-        unitType: UnitType.Ground, imagePath: "../img/lich.png", frames: [0,1]
+        unitType: UnitType.Ground, imagePath: "img/lich.png", frames: [0,1]
     }, 4, 3);   
     playerUnits.push(player);
 
